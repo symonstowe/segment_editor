@@ -18,7 +18,7 @@ function output = thesis_figures(fig_num)
 		end
 		[e1,e2,e3,e4,e5] = step_seg_thorax(imgs,frame);
 		% Steps to segment the external boundary
-		f = figure(1); clf;
+		f = figure(6); clf;
 		set(gcf,'renderer','painters');
 		set(groot,'defaultAxesTickLabelInterpreter','latex');  
 		set(groot,'defaulttextinterpreter','latex');
@@ -68,7 +68,23 @@ function output = thesis_figures(fig_num)
 		% Identify a folder 
 		img = imread([jpg_dir '1.JPG']);
 		keyboard
+	case '7'
+		% Show the FEM for each of the 3 different methods 
+		fname = ['~/Dropbox/projects/2021/CT_2_MESH/EIT-CT/2020_03_24/2432623_xueliu/2432623_xueliu_01.eit'];
+		CT_dir = [data_dir, '/PTS4/SRS00002'];
+		ref_frame = 136-107;
+		seg_data = ['~/Dropbox/projects/2021/CT_2_MESH/segment_editor/data/PTS4.mat'];
 
-
+		% Get the custom data to generate the plots
+		seg_data = load(seg_data);
+		bounds = seg_data.segs.SRS00002.bounds;
+		CT_fname = CT_dir;
+		lung_masks = get_lung_masks(CT_fname,ref_frame);
+		pp = [];
+		for j = 1:3 % use the 3 different types of models
+			[imdl,ROIs,pp] = mk_imdl(pp,j,bounds,lung_masks); 
+			pp.ROIs = ROIs;
+			keyboard
+		end
 	end
 end

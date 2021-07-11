@@ -12,9 +12,18 @@ function reconstruct_breaths(fname,seg_fname,CT_fname,ref_frame)
 	num_breaths = 5;
 	seg_sel = [breaths(1).trgh(1):breaths(num_breaths).trgh(2)];
 	clf;
+	set(gcf,'renderer','painters');
+	set(groot,'defaultAxesTickLabelInterpreter','latex');  
+	set(groot,'defaulttextinterpreter','latex');
+	set(groot,'defaultLegendInterpreter','latex');
 	tiledlayout(4,5, 'Padding', 'none', 'TileSpacing', 'compact');
 	nexttile([1 5])
 	plot(sum(dd(:,seg_sel)))
+	set(get(gca, 'XLabel'), 'String', 'time(s)');
+	set(get(gca, 'YLabel'), 'String', '$\Delta$ Z');
+	xlim([-20 300])
+	ax = gca;
+	ax.FontSize = 16; 
 	hold on 
 	for i=1:num_breaths
 		xline(breaths(i).pk-seg_sel(1),'r')
@@ -29,18 +38,19 @@ function reconstruct_breaths(fname,seg_fname,CT_fname,ref_frame)
 	for j = 1:3 % use the 3 different types of models
 		[imdl,ROIs,pp] = mk_imdl(pp,j,bounds,lung_masks); 
 		pp.ROIs = ROIs;
+
 		for i=1:num_breaths
 			img = inv_solve(imdl, dd(:,breaths(i).trgh(1)), dd(:,breaths(i).pk));
 			nexttile 
+			img.calc_colours.ref_level = 0; 
 			show_slices(img)
+			if j>1; view([90 90]); end
 		end
-		keyboard
 	end
 	%TODO - make a 2x2 figure to show boundary differences 
 
 	%TODO - make a 2x3 figure to show the lung shape differences 
 
-keyboard
 	
 
 function  pp = set_parameters(pp,dd);
@@ -85,11 +95,53 @@ function [imdl,ROIs,pp] = mk_imdl(pp,mdl_sel,bnds,msks)
 			[16 1.015 0.5],[0.05],0.08);
 		pp.lmag = 1.2;
 	case 2; % Use the extruded model with custom bounds
+		model_height = 0.8;
+		elec_height = model_height/2;
+		elec_size = 0.04;
+		elec_spacing = 1.25;
+		num_points = 40;
+		trunk = bnds{3}.exterior(:,1:2)/256;
+		l_l   = bnds{3}.l_lung(:,1:2)/256;
+		l_r   = bnds{3}.r_lung(:,1:2)/256;
 		fmdl = ng_mk_extruded_model({model_height,{trunk, l_l, l_r}, [4,num_points], 0.02},[16,elec_spacing,elec_height], [elec_size]);
 		pp.lmag = 1.5;
 	case 3; % Use the lung point clouds with alphashapes
+		model_height = 0.8;
+		elec_height = model_height/2;
+		elec_size = 0.04;
+		elec_spacing = 1.25;
+		num_points = 40;
+		trunk = bnds{3}.exterior(:,1:2)/256;
+		% Do lung A
+		layers = unique(msks.A.v);
+		new_layers = linspace(0,model_height,numel(layers));
+		zpts = msks.A.v;
+		for i=1:size(layers)
+			zpts(zpts == layers(i)) = new_layers(i);
+		end
+		a_shp = alphaShape([msks.A.r/256,msks.A.c/256,flipud(zpts)],0.1);
+		% Do lung B
+		layers = unique(msks.B.v);
+		new_layers = linspace(0,model_height,numel(layers));
+		zpts = msks.B.v;
+		for i=1:size(layers)
+			zpts(zpts == layers(i)) = new_layers(i);
+		end
+		b_shp = alphaShape([msks.B.r/256,msks.B.c/256,flipud(zpts)],0.1);
 		fmdl = ng_mk_extruded_model({model_height,{trunk}, [4,num_points], 0.02},[16,elec_spacing,elec_height], [elec_size]);
-        
+		mesh_pts = fmdl.nodes;
+		idx = inShape(a_shp,mesh_pts(:,1),mesh_pts(:,2),mesh_pts(:,3));
+		I = find(idx == 1);
+        	% Find elements made up of only selected nodes 
+        	elem_sel = ismember(fmdl.elems,I);
+        	I2 = find(sum(elem_sel,2) == 4); 
+        	fmdl.mat_idx{2} = I2;
+        	idx = inShape(b_shp,mesh_pts); % Compare 
+        	I = find(idx == 1);
+        	% Find elements made up of only selected nodes 
+        	elem_sel = ismember(fmdl.elems,I);
+        	I2 = find(sum(elem_sel,2) == 4); 
+        	fmdl.mat_idx{3} = I2;
 	end
 	%pp = get_boundary(fmdl,pp);
 
@@ -122,9 +174,13 @@ function [img,vh,vi] = set_elem_background(fmdl)
 	img = mk_image(fmdl,1);
 	vh = fwd_solve(img);
 	%   img.elem_data(vertcat(fmdl.mat_idx{2:3}))= 2;
+	if numel(fmdl.mat_idx)>1
+		img.elem_data([fmdl.mat_idx{2};fmdl.mat_idx{3}]) = 2; % lungs 
+	end
 	m_frac = elem_select(fmdl, @(x,y,z) ...
 		(x.^2)/0.6 + (y-0.25).^2/0.55 < 1);
 	img.elem_data = img.elem_data + m_frac*2;
+	%keyboard
 	vi = fwd_solve(img);
 
 function [breath] = detect_breaths(dd);
@@ -172,47 +228,3 @@ function [breath] = detect_breaths(dd);
             breath(reject) = [];
             pks(reject) = [];
         end
-
-function mask = get_lung_masks(CT_dir,ref_frame)
-	% TODO could we have just used poly2mask?!?!?!?!?!?
-	% Segment the lung frame for everywhere except the frames too close to the edge
-	% create a meshgrid of the masks to return a point cloud for alphashape generation
-	fileinfo = dir(fullfile(CT_dir, '**', '*.DCM'));
-	filenames = fullfile({fileinfo.folder}, {fileinfo.name});
-	for i=1:length(filenames)
-		imgs(:,:,i) = mat2gray(dicomread(filenames{i}));
-	end
-	c=0;
-	for i=ref_frame-10:ref_frame+10
-		c=c+1;
-		se = strel('disk',25); % just some extra smoothing to make everything go smoother...
-		[~, ~, ~, lung_healthy(:,:,c), total_lung(:,:,c)]=seg_thorax(imgs,i);
-		%lung_healthy(:,:,c) = imopen(lung_healthy(:,:,c));
-		total_lung(:,:,c) = imopen(total_lung(:,:,c), se);
-		s = regionprops(total_lung(:,:,c),'centroid');
-		x1 = s(1).Centroid(1);
-		x2 = s(2).Centroid(1);
-		[~,I_min] = min([x1,x2]); 
-		b = regionprops(total_lung(:,:,c),'BoundingBox');
-		for k=1:2 % If there are more than 2 lungs we have bigger issues
-			x = [floor(b(k).BoundingBox(1)),floor(b(k).BoundingBox(1)), ...
-			     floor(b(k).BoundingBox(1))+floor(b(k).BoundingBox(3)),floor(b(k).BoundingBox(1))+floor(b(k).BoundingBox(3))];
-			y = [floor(b(k).BoundingBox(2)),floor(b(k).BoundingBox(2))+floor(b(k).BoundingBox(4)), ...
-			     floor(b(k).BoundingBox(2))+floor(b(k).BoundingBox(4)),floor(b(k).BoundingBox(2))];
-			l_msk = poly2mask(x,y,512,512);
-			if k == I_min % Right lung
-				right_lung(:,:,c) = total_lung(:,:,c).*l_msk;
-			else
-				left_lung(:,:,c) = total_lung(:,:,c).*l_msk;
-			end
-		end
-	end
-	[r,c,v] = ind2sub(size(right_lung),find(right_lung));
-	mask.A.r = r;
-	mask.A.c = c;
-	mask.A.v = v;
-	[r,c,v] = ind2sub(size(left_lung),find(left_lung));
-	mask.B.r = r;
-	mask.B.c = c;
-	mask.B.v = v;
-	
