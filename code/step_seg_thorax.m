@@ -1,4 +1,4 @@
-function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_thorax(IMG,frame, NumberSlices,thresh_adjust)
+function [E1, E2, E3, E4, E5, R1, R2, R3, R4, R5, R6, R7, R8, L1, L2, L3, L4]=step_seg_thorax(IMG,frame, NumberSlices,thresh_adjust)
 	% IMG is a series of loaded CT images (512,512, number of frames)
 	% Frame - a frame selected from the thorax
 	% Number of slices (should be an odd number, used to define the rib region surrounding the slice)
@@ -8,6 +8,17 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 	% E3 - Iobrcbr - dialated and reconstructed 
 	% E4 - Binarized 
 	% E5 - Body final
+	% R2 - Shrunken boundary 
+	% R3 - Bones in R2
+	% R4 - remove small things
+	% R5 - Combine several slices
+	% R6 - enclose the top
+	% R7 - ribcage
+	% R8 - invert and keep center (chest cavity)
+	% L1 - chest cavity
+	% L2 - remove the heart region
+	% L3 - Identify the healthy lung
+	% L4 - Combine healthy and estimate
 	    lungs = 0;
 	    heart = 0;
 	    if nargin<3
@@ -70,8 +81,10 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 		    E3 = E3t; 
 		    E4 = E4t; 
 		    E5 = E5t;
+		    R1 = E5;
 		end
 		body_small = imerode(body_final, strel('disk', 8)); % Mask to find ribs and discard skin layer
+		R2 = body_small;
 	
 		%SEGMENT THE RIBS  
 		[~,locs] = findpeaks(dist,'MinPeakProminence',1000,'MinPeakDistance',20);
@@ -99,15 +112,19 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 		t_temp2 = t;
 		t_temp2(171:end,:) = 0;
 		tb = t_temp | t_temp2; 
-	
 		% remove really small things from total image
 		tc = bwareaopen(tb,5);
 		td = imclose(tc,strel('disk',5));
 		te = imopen(td,strel('disk',2));
 		ribs(:,:,i) = te;  
+		if ((NumberSlices-1)/2-i+1) == 0 
+			R3 = ta;
+			R4 = te;
+		end
 	    end
 	    % Combine to try and make a solid ribcage
 	    r      = sum(ribs,3);
+	    R5 = r;
 	    rCom   = imbinarize(r,1); % things that occur more than once
 	    if sum(sum(rCom)) < 12000
 		rCom = imbinarize(r,0);
@@ -117,10 +134,12 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 	    topEnc(256:end,:) = 0; % Remove bottom of image
 	    topEnc = imclose(topEnc,strel('disk',30));
 	    rCont   = topEnc | rCom;
+	    R6 = rCont;
 	    rEnc = imclose(rCont,strel('disk',15));
 	    rEnc = bwmorph(rEnc,'thicken'); % Just to be sure
 	    % Keep biggest object
 	    ribcage = imcomplement(bwareafilt(rEnc,1));
+	    R7 = ribcage;
 	    cavity = imclearborder(ribcage);
 	    cc = bwconncomp(cavity,4);
 	    number  = cc.NumObjects;
@@ -153,6 +172,8 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 	    kernel = ones(windowSize) / windowSize ^ 2;
 	    blurryImage = conv2(single(c_c7), kernel, 'same');
 	    chest_cavity = blurryImage > 0.50; % Rethreshold
+	    R8 = chest_cavity;
+	    L1 = R8;
 	    [~,loc] = findpeaks(smoothdata(-sum(chest_cavity),'gaussian',5),'MinPeakProminence',20,'MinPeakDistance',20);
 	    %%%%%%%%%% NOTE if this does not work we can maybe do a watershed?
 	    %findpeaks(smoothdata(-sum(chest_cavity),'gaussian',5),'MinPeakProminence',20)
@@ -170,11 +191,11 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 	    heart_region = (rowsInImage - centerY).^2 + ((columnsInImage - centerX).^2)/a^2 <= R.^2;
 	    test = (heart_region + chest_cavity);
 	    lung_region = chest_cavity-heart_region;
+	L2 = lung_region;
 	    %C1 = imfuse(lung_region, adjusted_slice,'falsecolor','Scaling','joint','ColorChannels',[1 2 0]);
 	    %imresize(C1,0.5);
 	    %subplot(311)
 	    %imshow(C1)
-	    lung_region = chest_cavity-heart_region;
 	   %keyboard
 	    % DO THE HEALTHY LUNG SEGMENTATION
 	    % Get healthy lungs
@@ -207,7 +228,7 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 	    lb = imclearborder(la);
 	    lung_rough = imbinarize(lb);
 	    lung_healthy = le;
-	    
+	L3 = le;
 	    % Smooth the lungs a little bit...
 	    windowSize = 5;
 	    kernel = ones(windowSize) / windowSize ^ 2;
@@ -226,5 +247,6 @@ function [E1, E2, E3, E4, E5, chest_cavity, lung_healthy, total_lung]=step_seg_t
 		cc = bwconncomp(total_lung,4);
 		num_objects  = cc.NumObjects;
 	    end
+	    L4 = total_lung;
 	return    
 	end

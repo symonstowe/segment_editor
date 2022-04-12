@@ -1,0 +1,29 @@
+\mode<presentation>
+
+% use specific font
+\RequirePackage{fontspec}
+\setsansfont{Gilroy}[ 
+Extension = .otf,
+Path = ./fonts/,
+UprightFont = *-Light,
+BoldFont = *-Bold,
+ItalicFont = *-LightItalic,
+BoldItalicFont = *-BoldItalic
+]
+
+\def\mathfamilydefault{\rmdefault}
+
+\setbeamerfont{title}{size=\LARGE,series=\bfseries}
+\setbeamerfont{frametitle}{size=\Large,series=\bfseries}
+\setbeamerfont{framesubtitle}{size=\large}
+\setbeamerfont{date}{size=\small}
+\setbeamerfont{section title}{size=\LARGE}
+\setbeamerfont{block title}{series=\bfseries}
+\setbeamerfont{highlight title}{size=\Huge,series=\bfseries}
+
+% solid end of proof symbol
+\setbeamertemplate{qed symbol}{$\blacksquare$}
+
+\mode
+<all>
+

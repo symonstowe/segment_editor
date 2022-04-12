@@ -1,4 +1,4 @@
-function reconstruct_breaths(fname,seg_fname,CT_fname,ref_frame,pt_num)
+function [ea_img_a,ea_img_b,ea_img_c,ea_img_d] = ea_reconstruct_breaths(fname,seg_fname,CT_fname,ref_frame,pt_num)
 	% Reconstruct all individual breaths in a file 
 	% and the EA breath in a seperate figure
 	[dd,auxdata,stim] = eidors_readdata(fname,"DRAEGER-EIT");
@@ -8,30 +8,31 @@ function reconstruct_breaths(fname,seg_fname,CT_fname,ref_frame,pt_num)
 	pp = set_parameters(pp,dd);
 	dd = preproc_data(dd,pp);
 	% TODO select complete breaths to reconstruct...
-	breaths = detect_breaths(dd);
+	[breaths,ea_breath, pk_loc] = detect_breaths(dd);
 	% Just do the first 5 breaths
-	num_breaths = 5;
-	seg_sel = [breaths(1).trgh(1):breaths(num_breaths).trgh(2)];
+	%num_breaths = 5;
+	seg_sel = [breaths(1).trgh(1):breaths(end).trgh(2)];
 	clf;
 	set(gcf,'renderer','painters');
 	set(groot,'defaultAxesTickLabelInterpreter','latex');  
 	set(groot,'defaulttextinterpreter','latex');
 	set(groot,'defaultLegendInterpreter','latex');
-	tiledlayout(5,5, 'Padding', 'none', 'TileSpacing', 'compact');
-	nexttile([1 5])
-	plot(T(seg_sel),sum(dd(:,seg_sel)))
-	set(get(gca, 'XLabel'), 'String', 'time(s)');
-	set(get(gca, 'YLabel'), 'String', '$\Delta$ Z');
-	%xlim([3 21])
+	T = [0:1/pp.FR:(size(ea_breath,2)/pp.FR)-1/pp.FR]-(pk_loc-1)/pp.FR;
 	axis tight
 	ax = gca;
 	ax.FontSize = 16; 
 	hold on 
-	for i=1:num_breaths
-		xline((breaths(i).pk-1)/pp.FR,'r')
-		xline((breaths(i).trgh(1)-1)/pp.FR,'b')
-		xline((breaths(i).trgh(2)-1)/pp.FR,'b')
-	end
+	plot(T,sum(ea_breath))
+	hold on
+	xline(T(pk_loc))
+	% Find the min before the EA peak to reconstruct from - quick easy expression
+	min_loc = find(sum(ea_breath(:,1:pk_loc))== min(sum(ea_breath(:,1:pk_loc))));
+	xline(T(min_loc))
+	hold off
+	title(['EA breath for PT0' num2str(pt_num)])
+	set(get(gca, 'YLabel'), 'String', 'mV? - not sure on draeger');
+	set(get(gca, 'XLabel'), 'String', 'Time (s)');
+	print(['../imgs/ea_breath_PT0' num2str(pt_num)], '-dsvg');
 	% Get the custom data to generate the plots
 	seg_data = load(seg_fname);
 	bounds = seg_data.segs.SRS00002.bounds;
@@ -40,13 +41,23 @@ function reconstruct_breaths(fname,seg_fname,CT_fname,ref_frame,pt_num)
 	for j = 0:3 % use the 4 different types of models
 		[imdl,ROIs,pp] = mk_imdl(pp,j,bounds,lung_masks,pt_num); 
 		pp.ROIs = ROIs;
-
-		for i=1:num_breaths
-			img = inv_solve(imdl, dd(:,breaths(i).trgh(1)), dd(:,breaths(i).pk));
-			nexttile 
-			img.calc_colours.ref_level = 0; 
-			show_slices(img)
-			if j>1; view([90 90]); end
+		img = inv_solve(imdl,ea_breath(:,min_loc),ea_breath(:,pk_loc));
+		%img.calc_colours.ref_level = 0; 
+		%img.calc_colours.clim = 100; 
+		%subplot(211)
+		%show_slices(img)
+		%img.elem_data(img.elem_data > 0) = 0;
+		%subplot(212)
+		%% TODO set a clim and wipe out ehe negatives here
+		%show_slices(img);
+		if j == 0
+			ea_img_a = img;
+		elseif j == 1
+			ea_img_b = img;
+		elseif j == 2
+			ea_img_c = img;
+		elseif j == 3
+			ea_img_d = img;
 		end
 	end
 	% Show the breath reconstructions 

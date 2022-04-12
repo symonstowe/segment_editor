@@ -2,13 +2,16 @@ function mask = get_lung_masks(CT_dir,ref_frame)
 	% TODO could we have just used poly2mask?!?!?!?!?!?
 	% Segment the lung frame for everywhere except the frames too close to the edge
 	% create a meshgrid of the masks to return a point cloud for alphashape generation
+	% I need to have all 5 slices corrected to do this properly...
+	bot_lim =  10;
+	top_lim =  10;
 	fileinfo = dir(fullfile(CT_dir, '**', '*.DCM'));
 	filenames = fullfile({fileinfo.folder}, {fileinfo.name});
 	for i=1:length(filenames)
 		imgs(:,:,i) = mat2gray(dicomread(filenames{i}));
 	end
 	c=0;
-	for i=ref_frame-10:ref_frame+10
+	for i=ref_frame-0:ref_frame+5
 		c=c+1;
 		se = strel('disk',25); % just some extra smoothing to make everything go smoother...
 		[~, ~, ~, lung_healthy(:,:,c), total_lung(:,:,c)]=seg_thorax(imgs,i);

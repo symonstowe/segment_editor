@@ -1,0 +1,131 @@
+\mode<presentation>
+
+% background ("light" option)
+\newcommand{\additionaltitlepage}{}
+\newcommand{\additionalsectionpage}
+{   \draw[color=white] (0.35cm,0.50\paperheight) -- (11.5cm,0.50\paperheight);
+}
+\newcommand{\additionalhighlightpage}{}
+\DeclareOptionBeamer{light}
+{   \renewcommand{\additionaltitlepage}
+	{	\fill[color=white,opacity=0.75] (0.7cm,0) rectangle (\the\paperwidth,\the\paperheight);
+	}
+	\renewcommand{\additionalsectionpage}
+	{   \fill[color=white,opacity=0.75] (-0.50cm,0.30\paperheight) rectangle (\the\paperwidth,0.495\paperheight);
+	    \fill[color=white,opacity=0.75] (-0.50cm,0.505\paperheight) rectangle (\the\paperwidth,0.60\paperheight);
+	}
+	\renewcommand{\additionalhighlightpage}
+	{   \fill[color=white,opacity=0.75] (-0.50cm,0.40\paperheight) rectangle (\the\paperwidth,0.60\paperheight);
+	}
+}
+\ProcessOptionsBeamer
+
+% test if section page
+\newif\ifinsectionframe
+\insectionframefalse
+% macro to define section pages in the presentation
+\newcommand{\sectionframe}{
+    \insectionframetrue
+    \frame{\sectionpage}
+    \insectionframefalse
+}
+
+% test if highlight page
+\newif\ifinhighlightframe
+\inhighlightframefalse
+% macro to define highlight page
+\newcommand{\highlightframe}[1]{
+    \inhighlightframetrue
+    \renewcommand{\highlighttext}{#1}
+    \frame{\usebeamertemplate*{highlight page}}
+    \inhighlightframefalse
+}
+
+% title page
+\defbeamertemplate*{title page}{AU}[1][]
+{   
+    \vskip0.75cm%
+  \begin{columns}[c]
+  \begin{column}{0.27\textwidth}
+    % additional logo in the upper right corner
+    \begin{tikzpicture}[remember picture,overlay]
+        \node[anchor=west, inner sep=1.25cm] at (current page.west){%
+        \inserttitlegraphic};
+    \end{tikzpicture}
+    \end{column}
+\vrule{}
+\begin{column}{0.7\textwidth}
+    % main title of the presentation
+%\colorbox{yellow}{%
+    \hspace{0.75cm}\begin{beamercolorbox}[wd=8cm,left,#1]{title page header}
+      \usebeamerfont{title}\inserttitle\par%
+    \end{beamercolorbox}%
+%}%
+    % subtitle of the presentation
+    \ifx\insertsubtitle\@empty
+    {}
+    \else
+    {   \vskip0.25cm%
+        \hspace{0.75cm}\begin{beamercolorbox}[wd=8cm,left,#1]{subtitle page header}
+            \usebeamerfont{subtitle}\insertsubtitle\par%
+        \end{beamercolorbox}%
+    }
+    \fi
+    % authors' names
+    \vskip0.75cm%
+    \hspace{0.75cm}\begin{beamercolorbox}[wd=9cm,left,#1]{author}
+      \usebeamerfont{author}\insertauthor%
+    \end{beamercolorbox}
+    
+    % affiliations
+    \ifx\insertsubtitle\@empty
+    {}
+    \else
+    {   \vskip0.25cm%
+        \hspace{0.75cm}\begin{beamercolorbox}[wd=8cm,left,#1]{institute}
+            \usebeamerfont{institute}\insertinstitute%
+        \end{beamercolorbox}
+    }
+    \fi    
+    
+    % date
+    \vskip0.25cm%
+    \ifx\insertsubtitle\@empty
+       \date{\today}
+    \fi
+    \hspace{0.75cm}\begin{beamercolorbox}[wd=8cm,left,#1]{date}
+        \usebeamerfont{author}\insertdate%
+    \end{beamercolorbox}
+  \vfill
+  \end{column}
+\end{columns}
+}
+
+% lists
+%\setbeamertemplate{items}[circle]
+\setbeamertemplate{itemize items}{\normalsize$\bullet$} 
+\setbeamertemplate{enumerate items}[circle] 
+\setbeamertemplate{sections/subsections in toc}[circle]
+
+% blocks
+\setbeamertemplate{blocks}[rounded=false,shadow=false] 
+
+% captions
+\setbeamertemplate{caption}[numbered]
+
+% disables the nav bar
+\setbeamertemplate{navigation symbols}{}
+
+% footnotes
+% move them above the footline
+\addtobeamertemplate{footnote}{\vspace{-6pt}\advance\hsize-0.5cm}{\vspace{6pt}}
+\renewcommand*{\footnoterule}{\kern -3pt \hrule \@width 2in \kern 8.6pt}
+
+% theorems
+\setbeamertemplate{theorems}[numbered]
+
+% bibliography
+\setbeamertemplate{bibliography item}{\insertbiblabel}
+
+\mode
+<all>
